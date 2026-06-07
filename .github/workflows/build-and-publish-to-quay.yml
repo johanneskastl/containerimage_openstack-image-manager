@@ -1,0 +1,113 @@
+---
+
+#
+name: Create and publish the container image to quay.io
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .github/workflows/build-and-publish-to-quay.yml
+  workflow_dispatch:
+  schedule:
+    # run on Monday at 01:30
+    - cron: '30 1 * * 1'
+
+# Prevent multiple workflow runs from racing to ensure that pushes are made
+# sequentialy for the main branch. Also cancel in progress workflow runs for
+# pull requests only.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
+
+# Defines two custom environment variables for the workflow. These are used for
+# the Container registry domain, and a name for the Docker image that this
+# workflow builds.
+env:
+  REGISTRY: quay.io
+  IMAGE_NAME: johanneskastlprivat/containerimage_openstack-image-manager
+
+# There is a single job in this workflow. It's configured to run on the latest
+# available version of Ubuntu.
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in
+    # this job.
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      # Uses the `docker/login-action` action to log in to the Container
+      # registry registry using the account and password that will publish the
+      # packages. Once published, the packages are scoped to the account
+      # defined here.
+      - name: Log in to the Container registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.QUAY_ROBOT_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      # This step uses
+      # [docker/metadata-action](https://github.com/docker/metadata-action#about)
+      # to extract tags and labels that will be applied to the specified image.
+      # The `id` "meta" allows the output of this step to be referenced in a
+      # subsequent step. The `images` value provides the base name for the tags
+      # and labels.
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha
+            type=raw,value={{date 'YYYYMMDD-HHmm'}}
+            type=raw,value=latest
+
+      # This step uses the `docker/build-push-action` action to build the
+      # image, based on your repository's `Dockerfile`. If the build succeeds,
+      # it pushes the image to GitHub Packages.
+      # It uses the `context` parameter to define the build's context as the
+      # set of files located in the specified path. For more information, see
+      # "[Usage](https://github.com/docker/build-push-action#usage)" in the
+      # README of the `docker/build-push-action` repository.
+      # It uses the `tags` and `labels` parameters to tag and label the image
+      # with the output from the "meta" step.
+      - name: Build and push Docker image to Quay.io
+        id: push
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      #
+      # Sign the image with cosign
+      #
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+
+      - name: Sign the container image
+        run: |
+          cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY ${REGISTRY}/${IMAGE_NAME}@${IMAGE_HASH}
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          IMAGE_HASH: ${{ steps.push.outputs.digest }}
