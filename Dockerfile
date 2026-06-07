@@ -10,7 +10,7 @@ USER 65532
 
 COPY --from=builder /home/nonroot/ /home/nonroot/
 
-LABEL "org.opencontainers.image.documentation"="https://docs.osism.tech/openstack-image-manager/"
+LABEL "org.opencontainers.image.documentation"="https://github.com/johanneskastl/containerimage_openstack-image-manager/blob/main/README.md"
 LABEL "org.opencontainers.image.licenses"="Apache-2.0"
 LABEL "org.opencontainers.image.source"="https://github.com/johanneskastl/containerimage_openstack-image-manager"
 LABEL "org.opencontainers.image.url"="https://quay.io/repository/johanneskastlprivat/containerimage_openstack-image-manager"
