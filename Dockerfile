@@ -10,6 +10,13 @@ USER 65532
 
 COPY --from=builder /home/nonroot/ /home/nonroot/
 
+LABEL "org.opencontainers.image.documentation"="https://docs.osism.tech/openstack-image-manager/"
+LABEL "org.opencontainers.image.licenses"="Apache-2.0"
+LABEL "org.opencontainers.image.source"="https://github.com/johanneskastl/containerimage_openstack-image-manager"
+LABEL "org.opencontainers.image.url"="https://quay.io/repository/johanneskastlprivat/containerimage_openstack-image-manager"
+LABEL "org.opencontainers.image.authors"="Johannes Kastl"
+LABEL "org.opencontainers.image.vendor"="Johannes Kastl"
+
 WORKDIR /etc/openstack-image-manager
 VOLUME ["/etc/openstack-image-manager"]
 ENTRYPOINT ["/home/nonroot/.local/bin/openstack-image-manager"]
